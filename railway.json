@@ -1,0 +1,10 @@
+{
+  "services": [
+    {
+      "name": "workflow-app",
+      "startCommand": "npm run start",
+      "buildCommand": "npm run build",
+      "sourceDir": "."
+    }
+  ]
+}
