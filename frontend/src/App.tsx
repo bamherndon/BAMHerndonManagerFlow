@@ -1,24 +1,18 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
-import UploadPOPage from "./UploadPOPage";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import UploadPOPage from './UploadPOPage';
 
 export function App() {
   return (
     <Router>
-      {/* 🌟 Always render the menu bar */}
       <header className="bg-blue-600 text-white p-4 flex justify-between">
         <h1 className="text-xl font-bold">Workflow App</h1>
         <nav>
-          <Link
-            to="/workflow/heartland-import"
-            className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700"
-          >
+          <Link to="/workflow/heartland-import" className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700">
             Start Heartland Import
           </Link>
         </nav>
       </header>
-
-      {/* 🌟 Dynamic content rendered below */}
       <main className="p-4">
         <Routes>
           <Route path="/" element={<HomePage />} />

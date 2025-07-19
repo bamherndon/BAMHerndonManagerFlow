@@ -1,30 +1,29 @@
-import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-import multer from "multer";
-import csv from "csv-parser";
-import fs from "fs";
-import { Pool } from "pg";
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import multer from 'multer';
+import csv from 'csv-parser';
+import fs from 'fs';
+import { Pool } from 'pg';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const upload = multer({ dest: "uploads/" });
+const upload = multer({ dest: 'uploads/' });
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-app.use(express.static(path.resolve(__dirname, "public")));
+app.use(express.static(path.join(__dirname, '../public')));
 
-// API route for CSV upload
-app.post("/api/upload-po-csv", upload.single("file"), async (req, res) => {
-  if (!req.file) return res.status(400).send("No file uploaded.");
+app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).send('No file uploaded.');
   const results: any[] = [];
 
   fs.createReadStream(req.file.path)
     .pipe(csv())
-    .on("data", (data) => results.push(data))
-    .on("end", async () => {
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
       try {
         for (const row of results) {
           await pool.query(
@@ -32,19 +31,17 @@ app.post("/api/upload-po-csv", upload.single("file"), async (req, res) => {
             [row['PO #'], row['PO Description'], row['PO Start Ship'], row['PO End Ship'], row['PO Vendor'], row['PO Received at location'], row['Item Description'], row['Item Default Cost'], row['Item Current Price'], row['Item Active?'] === 'yes', row['Item Track Inventory?'] === 'yes', row['Item Primary Vendor'], row['Item Taxable'] === 'yes', row['Item Department'], row['Item Category'], row['Item Series'], row['Item #'], row['PO Line Unit Cost'], row['PO Line Qty'], row['Item bricklink_id']]
           );
         }
-        if (req.file) fs.unlinkSync(req.file.path);
- // Clean up uploaded file
-        res.send("CSV data saved to database.");
+        if (req.file?.path) fs.unlinkSync(req.file.path);
+        res.send('CSV data saved to database.');
       } catch (err) {
         console.error(err);
-        res.status(500).send("Error saving CSV data to DB.");
+        res.status(500).send('Error saving CSV data to DB.');
       }
     });
 });
 
-// Serve index.html for all other routes (React Router support)
-app.get("*", (req, res) => {
-  res.sendFile(path.resolve(__dirname, "public", "index.html"));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public', 'index.html'));
 });
 
 const port = process.env.PORT || 3000;
