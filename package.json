@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsc && nodemon dist/server.js",
-    "build": "tsc",
+    "build": "tsc && cp -r public dist/public",
     "start": "node dist/server.js"
-  },
+    },
+
   "dependencies": {
     "express": "^4.18.2",
     "react": "^18.2.0",
