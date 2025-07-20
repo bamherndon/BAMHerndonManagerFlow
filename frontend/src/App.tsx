@@ -2,11 +2,11 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import UploadPOPage from "./UploadPOPage";
 import ReviewPage from "./ReviewPage";
+import UploadToyhousePage from "./UploadToyhousePage";
 
 export function App() {
   return (
     <Router>
-      {/* 🌟 Menu bar */}
       <header className="bg-blue-600 text-white p-4 flex justify-between">
         <h1 className="text-xl font-bold">Workflow App</h1>
         <nav>
@@ -16,15 +16,21 @@ export function App() {
           >
             Start Heartland Import
           </Link>
+          <Link
+            to="/workflow/upload-toyhouse"
+            className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700 ml-2"
+          >
+            Upload ToyHouse Data
+          </Link>
         </nav>
       </header>
 
-      {/* 🌟 Dynamic content below */}
       <main className="p-4">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/workflow/heartland-import" element={<UploadPOPage />} />
           <Route path="/workflow/review" element={<ReviewPage />} />
+          <Route path="/workflow/upload-toyhouse" element={<UploadToyhousePage />} />
         </Routes>
       </main>
     </Router>
