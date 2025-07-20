@@ -27,6 +27,7 @@ export default function ReviewPage() {
         <p><strong>Item Description:</strong> {currentItem.item_description}</p>
         <p><strong>Quantity:</strong> {currentItem.po_line_qty}</p>
         <p><strong>Cost:</strong> ${currentItem.po_line_unit_cost}</p>
+  <p><strong>Current Price:</strong> ${currentItem.item_current_price}</p>
         <p><strong>Bricklink ID:</strong> {currentItem.item_bricklink_id}</p>
       </div>
       <div className="flex justify-between mt-4">
