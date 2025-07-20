@@ -1,8 +1,8 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
-import UploadPOPage from "./UploadPOPage";
-import ReviewPage from "./ReviewPage";
-import UploadToyhousePage from "./UploadToyhousePage";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import UploadPOPage from './UploadPOPage';
+import ReviewPage from './ReviewPage';
+import UploadToyhousePage from './UploadToyhousePage';
 
 export function App() {
   return (
@@ -10,9 +10,12 @@ export function App() {
       <header className="bg-blue-600 text-white p-4 flex justify-between">
         <h1 className="text-xl font-bold">Workflow App</h1>
         <nav>
+          <Link to="/" className="px-3 py-1 hover:underline">
+            Home
+          </Link>
           <Link
             to="/workflow/heartland-import"
-            className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700"
+            className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700 ml-2"
           >
             Start Heartland Import
           </Link>

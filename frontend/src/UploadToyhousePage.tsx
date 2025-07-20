@@ -37,12 +37,26 @@ export default function UploadToyhousePage() {
 
   return (
     <div className="p-4">
-      <h2 className="text-lg font-semibold mb-4">Upload ToyHouse Master Data CSV</h2>
+      <h2 className="text-lg font-semibold mb-4">
+        Upload ToyHouse Master Data CSV
+      </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <input type="file" accept=".csv" onChange={handleFileChange} className="block" />
-        <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded">Upload</button>
+        <input
+          type="file"
+          accept=".csv"
+          onChange={handleFileChange}
+          className="block"
+        />
+        <button
+          type="submit"
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Upload
+        </button>
       </form>
-      {message && <p className="mt-4 text-blue-600">{message}</p>}
+      {message && (
+        <p className="mt-4 text-blue-600">{message}</p>
+      )}
     </div>
   );
 }

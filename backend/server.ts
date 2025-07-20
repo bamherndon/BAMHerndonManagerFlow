@@ -75,57 +75,40 @@ app.post('/api/upload-toyhouse-csv', upload.single('file'), async (req, res) => 
       try {
         await pool.query('DELETE FROM toyhouse_master_data');
 
-        // … inside your upload handler …
-for (const row of results) {
-  await pool.query(
-    `
-    INSERT INTO toyhouse_master_data
-      (brand, item_number, description, bricklink_id,
-       department, sub_department, bam_category, theme,
-       long_description, primary_vendor, sell_on_shopify,
-       shopify_tags, active, msrp, default_cost,
-       current_price, taxable, upc, height, width,
-       depth, weight, weight_in_oz, image_1, image_2, image_3)
-    VALUES (
-      $1,  $2,  $3,  $4,
-      $5,  $6,  $7,  $8,
-      $9,  $10, $11,
-      $12, $13, $14, $15,
-      $16, $17, $18, $19, $20,
-      $21, $22, $23, $24, $25, $26
-    )
-    `,
-    [
-      row.brand,
-      row.item_number,
-      row.description,
-      row.bricklink_id,
-      row.department,
-      row.sub_department,
-      row.bam_category,
-      row.theme,
-      row.long_description,
-      row.primary_vendor,
-      row.sell_on_shopify === 'Yes',
-      row.shopify_tags,
-      row.active === 'TRUE',
-      parseFloat(row.msrp?.replace('$', '') || '0'),
-      parseFloat(row.default_cost?.replace('$', '') || '0'),
-      parseFloat(row.current_price?.replace('$', '') || '0'),
-      row.taxable === 'Yes',
-      row.upc,
-      parseFloat(row.height || '0'),
-      parseFloat(row.width || '0'),
-      parseFloat(row.depth || '0'),
-      parseFloat(row.weight || '0'),
-      parseFloat(row.weight_in_oz || '0'),
-      row.image_1,
-      row.image_2,
-      row.image_3
-    ]
-  );
-}
-
+        for (const row of results) {
+          await pool.query(`
+            INSERT INTO toyhouse_master_data
+            (brand, item_number, description, bricklink_id, department, sub_department, bam_category, theme, long_description, primary_vendor, sell_on_shopify, shopify_tags, active, msrp, default_cost, current_price, taxable, upc, height, width, depth, weight, weight_in_oz, image_1, image_2, image_3)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+          `, [
+            row.brand,
+            row.item_number,
+            row.description,
+            row.bricklink_id,
+            row.department,
+            row.sub_department,
+            row.bam_category,
+            row.theme,
+            row.long_description,
+            row.primary_vendor,
+            row.sell_on_shopify === 'Yes',
+            row.shopify_tags,
+            row.active === 'TRUE',
+            parseFloat(row.msrp?.replace('$', '') || '0'),
+            parseFloat(row.default_cost?.replace('$', '') || '0'),
+            parseFloat(row.current_price?.replace('$', '') || '0'),
+            row.taxable === 'Yes',
+            row.upc,
+            parseFloat(row.height || '0'),
+            parseFloat(row.width || '0'),
+            parseFloat(row.depth || '0'),
+            parseFloat(row.weight || '0'),
+            parseFloat(row.weight_in_oz || '0'),
+            row.image_1,
+            row.image_2,
+            row.image_3
+          ]);
+        }
         if (req.file?.path) fs.unlinkSync(req.file.path);
         res.send('ToyHouse master data CSV uploaded successfully!');
       } catch (err) {
