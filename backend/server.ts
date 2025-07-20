@@ -54,7 +54,7 @@ async function ensureTableExists() {
 
 ensureTableExists();
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '../public')));
 
 app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).send('No file uploaded.');
@@ -81,7 +81,7 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, '../public', 'index.html'));
 });
 
 const port = process.env.PORT || 3000;
