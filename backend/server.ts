@@ -17,7 +17,6 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
 
-// 🆕 Auto-create table if missing
 async function ensureTableExists() {
   try {
     await pool.query(`
@@ -54,7 +53,6 @@ async function ensureTableExists() {
 
 ensureTableExists();
 
-// 🆕 Fixed public path for prod (../public)
 app.use(express.static(path.resolve(__dirname, '../public')));
 
 app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
@@ -63,13 +61,13 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
 
   fs.createReadStream(req.file.path)
     .pipe(csv({
-      // 🆕 Normalize headers: trim, lowercase, replace spaces/# with _
       mapHeaders: ({ header }) =>
         header.trim().toLowerCase().replace(/ /g, '_').replace(/#/g, 'number')
     }))
     .on('data', (data) => results.push(data))
     .on('end', async () => {
       try {
+        await pool.query('DELETE FROM heartland_po_imports');
         for (const row of results) {
           await pool.query(
             "INSERT INTO heartland_po_imports (po_number, po_description, po_start_ship, po_end_ship, po_vendor, po_received_at_location, item_description, item_default_cost, item_current_price, item_active, item_track_inventory, item_primary_vendor, item_taxable, item_department, item_category, item_series, item_number, po_line_unit_cost, po_line_qty, item_bricklink_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)",
@@ -97,7 +95,7 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
             ]
           );
         }
-        if (req.file?.path) fs.unlinkSync(req.file.path); // Clean up
+        if (req.file?.path) fs.unlinkSync(req.file.path);
         res.send('CSV data saved to database.');
       } catch (err) {
         console.error("❌ DB Insert Error:", err);
@@ -106,7 +104,16 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
     });
 });
 
-// 🆕 Serve React app for all other routes
+app.get('/api/import-items', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM heartland_po_imports ORDER BY id');
+    res.json(result.rows);
+  } catch (err) {
+    console.error("❌ Error fetching items:", err);
+    res.status(500).send('Error fetching import items');
+  }
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.resolve(__dirname, '../public/index.html'));
 });

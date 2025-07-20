@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function UploadPOPage() {
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -13,24 +15,25 @@ export default function UploadPOPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) {
-      setMessage('Please select a CSV file to upload.');
+      setMessage("Please select a CSV file to upload.");
       return;
     }
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     try {
-      const response = await fetch('/api/upload-po-csv', {
-        method: 'POST',
+      const response = await fetch("/api/upload-po-csv", {
+        method: "POST",
         body: formData,
       });
       if (response.ok) {
-        setMessage('CSV uploaded and saved successfully!');
+        setMessage("CSV uploaded and saved successfully!");
+        navigate("/workflow/review");
       } else {
-        setMessage('Error uploading CSV.');
+        setMessage("Error uploading CSV.");
       }
     } catch (error) {
-      setMessage('Network error: Unable to upload CSV.');
+      setMessage("Network error: Unable to upload CSV.");
     }
   };
 
