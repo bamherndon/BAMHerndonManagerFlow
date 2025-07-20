@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import UploadPOPage from './UploadPOPage';
 import ReviewPage from './ReviewPage';
 import UploadToyhousePage from './UploadToyhousePage';
+import UploadSetsImagesPage from "./UploadSetsImagesPage";
+
 
 export function App() {
   return (
@@ -25,6 +27,12 @@ export function App() {
           >
             Upload ToyHouse Data
           </Link>
+          <Link
+          to="/workflow/upload-sets-images"
+          className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700 ml-2"
+        >
+          Upload Sets Images
+        </Link>
         </nav>
       </header>
 
@@ -34,6 +42,10 @@ export function App() {
           <Route path="/workflow/heartland-import" element={<UploadPOPage />} />
           <Route path="/workflow/review" element={<ReviewPage />} />
           <Route path="/workflow/upload-toyhouse" element={<UploadToyhousePage />} />
+            <Route
+          path="/workflow/upload-sets-images"
+          element={<UploadSetsImagesPage />}
+        />
         </Routes>
       </main>
     </Router>

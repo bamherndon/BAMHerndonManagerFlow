@@ -14,10 +14,9 @@ const app = express();
 const upload = multer({ dest: 'uploads/' });
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.NODE_ENV === 'production'
-      ? { rejectUnauthorized: false }
-      : false,
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false
 });
 
 // helper to safely parse numeric fields
@@ -91,6 +90,16 @@ async function ensureTablesExist() {
       );
     `);
 
+    // Sets images table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS set_image_urls (
+        id SERIAL PRIMARY KEY,
+        bricklink_id TEXT,
+        rebrickable_image_url TEXT,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('✅ All tables ensured');
   } catch (err) {
     console.error('❌ Error ensuring tables:', err);
@@ -99,77 +108,69 @@ async function ensureTablesExist() {
 
 ensureTablesExist();
 
+// Serve React build
 app.use(express.static(path.resolve(__dirname, '../public')));
 
-// Upload Heartland PO CSV
-app.post(
-  '/api/upload-po-csv',
-  upload.single('file'),
-  async (req, res) => {
-    if (!req.file) return res.status(400).send('No file uploaded.');
-    const results: any[] = [];
+// 1️⃣ Upload Heartland PO CSV
+app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).send('No file uploaded.');
+  const results: any[] = [];
 
-    fs.createReadStream(req.file.path)
-      .pipe(
-        csv({
-          mapHeaders: ({ header }) =>
-            header.trim().toLowerCase().replace(/ /g, '_').replace(/#/g, 'number'),
-        })
-      )
-      .on('data', (data) => results.push(data))
-      .on('end', async () => {
-        try {
-          await pool.query('DELETE FROM heartland_po_imports');
+  fs.createReadStream(req.file.path)
+    .pipe(csv({
+      mapHeaders: ({ header }) =>
+        header.trim().toLowerCase().replace(/ /g, '_').replace(/#/g, 'number')
+    }))
+    .on('data', (data) => results.push(data))
+    .on('end', async () => {
+      try {
+        await pool.query('DELETE FROM heartland_po_imports');
 
-          for (const row of results) {
-            await pool.query(
-              `
-              INSERT INTO heartland_po_imports
-                (po_number, po_description, po_start_ship, po_end_ship,
-                 po_vendor, po_received_at_location, item_description,
-                 item_default_cost, item_current_price, item_active,
-                 item_track_inventory, item_primary_vendor, item_taxable,
-                 item_department, item_category, item_series, item_number,
-                 po_line_unit_cost, po_line_qty, item_bricklink_id)
-              VALUES
-                ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-            `,
-              [
-                row.po_number,
-                row.po_description,
-                row.po_start_ship,
-                row.po_end_ship,
-                row.po_vendor,
-                row.po_received_at_location,
-                row.item_description,
-                parseNumber(row.item_default_cost),
-                parseNumber(row.item_current_price),
-                row.item_active === 'yes',
-                row.item_track_inventory === 'yes',
-                row.item_primary_vendor,
-                row.item_taxable === 'yes',
-                row.item_department,
-                row.item_category,
-                row.item_series,
-                row.item_number,
-                parseNumber(row.po_line_unit_cost),
-                parseInt(row.po_line_qty, 10) || 0,
-                row.item_bricklink_id,
-              ]
-            );
-          }
-
-          if (req.file?.path) fs.unlinkSync(req.file.path);
-          res.send('CSV data saved to database.');
-        } catch (err) {
-          console.error('❌ DB Insert Error:', err);
-          res.status(500).send('Error saving CSV data to DB.');
+        for (const row of results) {
+          await pool.query(`
+            INSERT INTO heartland_po_imports
+              (po_number, po_description, po_start_ship, po_end_ship,
+               po_vendor, po_received_at_location, item_description,
+               item_default_cost, item_current_price, item_active,
+               item_track_inventory, item_primary_vendor, item_taxable,
+               item_department, item_category, item_series, item_number,
+               po_line_unit_cost, po_line_qty, item_bricklink_id)
+            VALUES
+              ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          `, [
+            row.po_number,
+            row.po_description,
+            row.po_start_ship,
+            row.po_end_ship,
+            row.po_vendor,
+            row.po_received_at_location,
+            row.item_description,
+            parseNumber(row.item_default_cost),
+            parseNumber(row.item_current_price),
+            row.item_active === 'yes',
+            row.item_track_inventory === 'yes',
+            row.item_primary_vendor,
+            row.item_taxable === 'yes',
+            row.item_department,
+            row.item_category,
+            row.item_series,
+            row.item_number,
+            parseNumber(row.po_line_unit_cost),
+            parseInt(row.po_line_qty, 10) || 0,
+            row.item_bricklink_id
+          ]);
         }
-      });
-  }
-);
 
-// Fetch all PO import items
+        fs.unlinkSync(req.file.path);
+        res.send('CSV data saved to database.');
+      } catch (err) {
+        console.error('❌ DB Insert Error:', err);
+        res.status(500).send('Error saving CSV data to DB.');
+      }
+    });
+});
+
+// 2️⃣ Fetch all PO import items
 app.get('/api/import-items', async (req, res) => {
   try {
     const result = await pool.query(
@@ -182,85 +183,108 @@ app.get('/api/import-items', async (req, res) => {
   }
 });
 
-// Upload ToyHouse master data CSV
-app.post(
-  '/api/upload-toyhouse-csv',
-  upload.single('file'),
-  async (req, res) => {
-    if (!req.file) return res.status(400).send('No file uploaded.');
-    const results: any[] = [];
+// 3️⃣ Upload ToyHouse master data CSV
+app.post('/api/upload-toyhouse-csv', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).send('No file uploaded.');
+  const rows: any[] = [];
 
-    fs.createReadStream(req.file.path)
-      .pipe(
-        csv({
-          mapHeaders: ({ header }) =>
-            header.trim().toLowerCase().replace(/ /g, '_').replace(/#/g, 'number'),
-        })
-      )
-      .on('data', (data) => results.push(data))
-      .on('end', async () => {
-        // clear out old master data
-        await pool.query('DELETE FROM toyhouse_master_data');
-        let successCount = 0;
+  fs.createReadStream(req.file.path)
+    .pipe(csv({
+      mapHeaders: ({ header }) =>
+        header.trim().toLowerCase().replace(/ /g, '_').replace(/#/g, 'number')
+    }))
+    .on('data', (data) => rows.push(data))
+    .on('end', async () => {
+      await pool.query('DELETE FROM toyhouse_master_data');
+      let success = 0;
 
-        for (const [i, row] of results.entries()) {
-          try {
-            await pool.query(
-              `
-              INSERT INTO toyhouse_master_data
-                (brand, item_number, description, bricklink_id,
-                 department, sub_department, bam_category, theme,
-                 long_description, primary_vendor, sell_on_shopify,
-                 shopify_tags, active, msrp, default_cost,
-                 current_price, taxable, upc, height, width,
-                 depth, weight, weight_in_oz, image_1, image_2, image_3)
-              VALUES
-                ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-                 $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                 $21,$22,$23,$24,$25,$26)
-              `,
-              [
-                row.brand,
-                row.item_number,
-                row.description,
-                row.bricklink_id,
-                row.department,
-                row.sub_department,
-                row.bam_category,
-                row.theme,
-                row.long_description,
-                row.primary_vendor,
-                row.sell_on_shopify === 'Yes',
-                row.shopify_tags,
-                row.active === 'TRUE',
-                parseNumber(row.msrp),
-                parseNumber(row.default_cost),
-                parseNumber(row.current_price),
-                row.taxable === 'Yes',
-                row.upc,
-                parseNumber(row.height),
-                parseNumber(row.width),
-                parseNumber(row.depth),
-                parseNumber(row.weight),
-                parseNumber(row.weight_in_oz),
-                row.image_1,
-                row.image_2,
-                row.image_3,
-              ]
-            );
-            successCount++;
-          } catch (e) {
-            console.error(`⚠️ Skipped ToyHouse row ${i + 1}:`, e);
-          }
+      for (const [i, row] of rows.entries()) {
+        try {
+          await pool.query(`
+            INSERT INTO toyhouse_master_data
+              (brand, item_number, description, bricklink_id,
+               department, sub_department, bam_category, theme,
+               long_description, primary_vendor, sell_on_shopify,
+               shopify_tags, active, msrp, default_cost,
+               current_price, taxable, upc, height, width,
+               depth, weight, weight_in_oz, image_1, image_2, image_3)
+            VALUES
+              ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+               $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+               $21,$22,$23,$24,$25,$26)
+          `, [
+            row.brand,
+            row.item_number,
+            row.description,
+            row.bricklink_id,
+            row.department,
+            row.sub_department,
+            row.bam_category,
+            row.theme,
+            row.long_description,
+            row.primary_vendor,
+            row.sell_on_shopify === 'Yes',
+            row.shopify_tags,
+            row.active === 'TRUE',
+            parseNumber(row.msrp),
+            parseNumber(row.default_cost),
+            parseNumber(row.current_price),
+            row.taxable === 'Yes',
+            row.upc,
+            parseNumber(row.height),
+            parseNumber(row.width),
+            parseNumber(row.depth),
+            parseNumber(row.weight),
+            parseNumber(row.weight_in_oz),
+            row.image_1,
+            row.image_2,
+            row.image_3
+          ]);
+          success++;
+        } catch (e) {
+          console.error(`⚠️ Skipped ToyHouse row ${i + 1}:`, e);
         }
+      }
 
-        if (req.file?.path) fs.unlinkSync(req.file.path);
-        res.send(
-          `Imported ${successCount} of ${results.length} ToyHouse master records.`
-        );
-      });
-  }
-);
+      fs.unlinkSync(req.file.path);
+      res.send(`Imported ${success} of ${rows.length} ToyHouse master records.`);
+    });
+});
+
+// 4️⃣ Upload Sets images CSV
+app.post('/api/upload-sets-images', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).send('No file uploaded.');
+  const rows: any[] = [];
+
+  fs.createReadStream(req.file.path)
+    .pipe(csv({
+      mapHeaders: ({ header }) =>
+        header.trim().toLowerCase().replace(/ /g, '_')
+    }))
+    .on('data', (data) => rows.push(data))
+    .on('end', async () => {
+      await pool.query('DELETE FROM set_image_urls');
+      let count = 0;
+
+      for (const [i, row] of rows.entries()) {
+        try {
+          await pool.query(`
+            INSERT INTO set_image_urls (bricklink_id, rebrickable_image_url)
+            VALUES ($1,$2)
+          `, [
+            row.bricklink_id,
+            row.rebrickable_image_url
+          ]);
+          count++;
+        } catch (e) {
+          console.error(`⚠️ Skipped Sets row ${i + 1}:`, e);
+        }
+      }
+
+      fs.unlinkSync(req.file.path);
+      res.send(`Imported ${count} of ${rows.length} set-image records.`);
+    });
+});
 
 // SPA fallback for React Router
 app.get('*', (req, res) => {
