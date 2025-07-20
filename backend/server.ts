@@ -54,7 +54,8 @@ async function ensureTableExists() {
 
 ensureTableExists();
 
-app.use(express.static(path.join(__dirname, 'public')));
+// 🆕 Fixed public path for prod (../public)
+app.use(express.static(path.resolve(__dirname, '../public')));
 
 app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).send('No file uploaded.');
@@ -62,7 +63,7 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
 
   fs.createReadStream(req.file.path)
     .pipe(csv({
-      // 🆕 Normalize CSV headers: trim, lowercase, replace spaces & '#' with '_'
+      // 🆕 Normalize headers: trim, lowercase, replace spaces/# with _
       mapHeaders: ({ header }) =>
         header.trim().toLowerCase().replace(/ /g, '_').replace(/#/g, 'number')
     }))
@@ -96,20 +97,21 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
             ]
           );
         }
-        if (req.file?.path) fs.unlinkSync(req.file.path); // Clean up file
+        if (req.file?.path) fs.unlinkSync(req.file.path); // Clean up
         res.send('CSV data saved to database.');
       } catch (err) {
-        console.error(err);
+        console.error("❌ DB Insert Error:", err);
         res.status(500).send('Error saving CSV data to DB.');
       }
     });
 });
 
+// 🆕 Serve React app for all other routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.resolve(__dirname, '../public/index.html'));
 });
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`🚀 Server running at http://localhost:${port}`);
 });
