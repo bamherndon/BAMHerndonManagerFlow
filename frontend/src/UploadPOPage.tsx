@@ -27,9 +27,10 @@ export default function UploadPOPage() {
         body: formData,
       });
       if (response.ok) {
-        setMessage("CSV uploaded and saved successfully!");
-        navigate("/workflow/review");
-      } else {
+  console.log("✅ CSV uploaded, navigating to /workflow/review");
+  navigate("/workflow/review");
+}
+ else {
         setMessage("Error uploading CSV.");
       }
     } catch (error) {
