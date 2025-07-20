@@ -12,7 +12,11 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+});
+
 
 app.use(express.static(path.join(__dirname, '../public')));
 
