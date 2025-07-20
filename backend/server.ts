@@ -17,8 +17,44 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
 
+// 🆕 Auto-create table if it doesn't exist
+async function ensureTableExists() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS heartland_po_imports (
+        id SERIAL PRIMARY KEY,
+        po_number TEXT,
+        po_description TEXT,
+        po_start_ship DATE,
+        po_end_ship DATE,
+        po_vendor TEXT,
+        po_received_at_location TEXT,
+        item_description TEXT,
+        item_default_cost NUMERIC,
+        item_current_price NUMERIC,
+        item_active BOOLEAN,
+        item_track_inventory BOOLEAN,
+        item_primary_vendor TEXT,
+        item_taxable BOOLEAN,
+        item_department TEXT,
+        item_category TEXT,
+        item_series TEXT,
+        item_number TEXT,
+        po_line_unit_cost NUMERIC,
+        po_line_qty INTEGER,
+        item_bricklink_id TEXT,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("✅ Table heartland_po_imports ensured");
+  } catch (err) {
+    console.error("❌ Error ensuring table:", err);
+  }
+}
 
-app.use(express.static(path.join(__dirname, '../public')));
+ensureTableExists();
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).send('No file uploaded.');
@@ -45,7 +81,7 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const port = process.env.PORT || 3000;
