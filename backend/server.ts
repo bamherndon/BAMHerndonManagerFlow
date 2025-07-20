@@ -32,8 +32,6 @@ async function ensureTableExists() {
         theme TEXT,
         long_description TEXT,
         primary_vendor TEXT,
-        launch DATE,
-        retirement_date DATE,
         sell_on_shopify BOOLEAN,
         shopify_tags TEXT,
         active BOOLEAN,
@@ -80,8 +78,8 @@ app.post('/api/upload-toyhouse-csv', upload.single('file'), async (req, res) => 
         for (const row of results) {
           await pool.query(`
             INSERT INTO toyhouse_master_data
-            (brand, item_number, description, bricklink_id, department, sub_department, bam_category, theme, long_description, primary_vendor, launch, retirement_date, sell_on_shopify, shopify_tags, active, msrp, default_cost, current_price, taxable, upc, height, width, depth, weight, weight_in_oz, image_1, image_2, image_3)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+            (brand, item_number, description, bricklink_id, department, sub_department, bam_category, theme, long_description, primary_vendor, sell_on_shopify, shopify_tags, active, msrp, default_cost, current_price, taxable, upc, height, width, depth, weight, weight_in_oz, image_1, image_2, image_3)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
           `, [
             row.brand,
             row.item_number,
@@ -93,8 +91,6 @@ app.post('/api/upload-toyhouse-csv', upload.single('file'), async (req, res) => 
             row.theme,
             row.long_description,
             row.primary_vendor,
-            row.launch ? new Date(row.launch) : null,
-            row.retirement_date ? new Date(row.retirement_date) : null,
             row.sell_on_shopify === 'Yes',
             row.shopify_tags,
             row.active === 'TRUE',
