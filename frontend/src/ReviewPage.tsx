@@ -1,12 +1,11 @@
-// frontend/src/ReviewPage.tsx
 import React, { useEffect, useState, useRef } from "react";
 
 export default function ReviewPage() {
   const [items, setItems] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-
+  const [swipeOffset, setSwipeOffset] = useState(0);
   const touchStartX = useRef(0);
-  const touchEndX = useRef(0);
+
   const SWIPE_THRESHOLD = 50; // px
 
   useEffect(() => {
@@ -32,20 +31,25 @@ export default function ReviewPage() {
 
   const onTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    setSwipeOffset(0);
   };
+
   const onTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
+    const deltaX = e.touches[0].clientX - touchStartX.current;
+    setSwipeOffset(deltaX);
   };
+
   const onTouchEnd = () => {
-    const deltaX = touchEndX.current - touchStartX.current;
-    if (deltaX > SWIPE_THRESHOLD) {
-      handleNext();
-    } else if (deltaX < -SWIPE_THRESHOLD) {
+    // Determine swipe direction
+    if (swipeOffset > SWIPE_THRESHOLD) {
+      // right swipe → Previous
       handlePrev();
+    } else if (swipeOffset < -SWIPE_THRESHOLD) {
+      // left swipe → Next
+      handleNext();
     }
-    // reset
-    touchStartX.current = 0;
-    touchEndX.current = 0;
+    // animate back to center
+    setSwipeOffset(0);
   };
 
   return (
@@ -54,13 +58,19 @@ export default function ReviewPage() {
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      style={{ touchAction: "pan-y" }}
+      style={{ overflow: "hidden", touchAction: "pan-y" }}
     >
-      <h2 className="text-lg font-semibold mb-4">
-        Reviewing Item {currentIndex + 1} of {items.length}
-      </h2>
+      <div
+        className="border p-4 rounded bg-white shadow space-y-2"
+        style={{
+          transform: `translateX(${swipeOffset}px)`,
+          transition: swipeOffset === 0 ? "transform 0.3s ease" : "none",
+        }}
+      >
+        <h2 className="text-lg font-semibold mb-4">
+          Reviewing Item {currentIndex + 1} of {items.length}
+        </h2>
 
-      <div className="border p-4 rounded bg-white shadow space-y-2">
         <p>
           <strong>Patron trade:</strong>{" "}
           <a
