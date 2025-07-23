@@ -1,9 +1,13 @@
 // frontend/src/ReviewPage.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 
 export default function ReviewPage() {
   const [items, setItems] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+  const SWIPE_THRESHOLD = 50; // px
 
   useEffect(() => {
     fetch("/api/import-items")
@@ -12,15 +16,46 @@ export default function ReviewPage() {
       .catch((err) => console.error("Failed to fetch items:", err));
   }, []);
 
-  if (items.length === 0) {
+  if (!items.length) {
     return <div className="p-4">Loading import items...</div>;
   }
 
   const currentItem = items[currentIndex];
   const patronId = currentItem.po_number.split("-")[1] || "";
 
+  const handleNext = () => {
+    setCurrentIndex((i) => Math.min(items.length - 1, i + 1));
+  };
+  const handlePrev = () => {
+    setCurrentIndex((i) => Math.max(0, i - 1));
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = () => {
+    const deltaX = touchEndX.current - touchStartX.current;
+    if (deltaX > SWIPE_THRESHOLD) {
+      handleNext();
+    } else if (deltaX < -SWIPE_THRESHOLD) {
+      handlePrev();
+    }
+    // reset
+    touchStartX.current = 0;
+    touchEndX.current = 0;
+  };
+
   return (
-    <div className="p-4">
+    <div
+      className="p-4"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={{ touchAction: "pan-y" }}
+    >
       <h2 className="text-lg font-semibold mb-4">
         Reviewing Item {currentIndex + 1} of {items.length}
       </h2>
@@ -90,16 +125,14 @@ export default function ReviewPage() {
 
       <div className="flex justify-between mt-4">
         <button
-          onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+          onClick={handlePrev}
           disabled={currentIndex === 0}
           className="px-4 py-2 bg-gray-300 rounded disabled:opacity-50"
         >
           Previous
         </button>
         <button
-          onClick={() =>
-            setCurrentIndex(Math.min(items.length - 1, currentIndex + 1))
-          }
+          onClick={handleNext}
           disabled={currentIndex === items.length - 1}
           className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
         >
