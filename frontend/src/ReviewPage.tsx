@@ -1,11 +1,13 @@
+// frontend/src/ReviewPage.tsx
 import React, { useEffect, useState, useRef } from "react";
 
 export default function ReviewPage() {
   const [items, setItems] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
-  const touchStartX = useRef(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
+  const touchStartX = useRef(0);
   const SWIPE_THRESHOLD = 50; // px
 
   useEffect(() => {
@@ -22,34 +24,63 @@ export default function ReviewPage() {
   const currentItem = items[currentIndex];
   const patronId = currentItem.po_number.split("-")[1] || "";
 
-  const handleNext = () => {
+  const handleNext = () =>
     setCurrentIndex((i) => Math.min(items.length - 1, i + 1));
-  };
-  const handlePrev = () => {
+  const handlePrev = () =>
     setCurrentIndex((i) => Math.max(0, i - 1));
-  };
 
   const onTouchStart = (e: React.TouchEvent) => {
+    if (isTransitioning) return;
     touchStartX.current = e.touches[0].clientX;
-    setSwipeOffset(0);
   };
 
   const onTouchMove = (e: React.TouchEvent) => {
+    if (isTransitioning) return;
     const deltaX = e.touches[0].clientX - touchStartX.current;
     setSwipeOffset(deltaX);
   };
 
   const onTouchEnd = () => {
-    // Determine swipe direction
-    if (swipeOffset > SWIPE_THRESHOLD) {
-      // right swipe → Previous
-      handlePrev();
-    } else if (swipeOffset < -SWIPE_THRESHOLD) {
-      // left swipe → Next
-      handleNext();
+    if (isTransitioning) return;
+    const screenWidth = window.innerWidth;
+    if (swipeOffset < -SWIPE_THRESHOLD) {
+      // swipe left → Next
+      if (currentIndex < items.length - 1) {
+        setIsTransitioning(true);
+        setSwipeOffset(-screenWidth);
+        setTimeout(() => {
+          handleNext();
+          setIsTransitioning(false);
+          setSwipeOffset(0);
+        }, 300);
+      } else {
+        // no next → snap back
+        setIsTransitioning(true);
+        setSwipeOffset(0);
+        setTimeout(() => setIsTransitioning(false), 300);
+      }
+    } else if (swipeOffset > SWIPE_THRESHOLD) {
+      // swipe right → Previous
+      if (currentIndex > 0) {
+        setIsTransitioning(true);
+        setSwipeOffset(screenWidth);
+        setTimeout(() => {
+          handlePrev();
+          setIsTransitioning(false);
+          setSwipeOffset(0);
+        }, 300);
+      } else {
+        // no prev → snap back
+        setIsTransitioning(true);
+        setSwipeOffset(0);
+        setTimeout(() => setIsTransitioning(false), 300);
+      }
+    } else {
+      // too short → just reset
+      setIsTransitioning(true);
+      setSwipeOffset(0);
+      setTimeout(() => setIsTransitioning(false), 300);
     }
-    // animate back to center
-    setSwipeOffset(0);
   };
 
   return (
@@ -58,13 +89,13 @@ export default function ReviewPage() {
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      style={{ overflow: "hidden", touchAction: "pan-y" }}
+      style={{ touchAction: "pan-y" }}
     >
       <div
         className="border p-4 rounded bg-white shadow space-y-2"
         style={{
           transform: `translateX(${swipeOffset}px)`,
-          transition: swipeOffset === 0 ? "transform 0.3s ease" : "none",
+          transition: isTransitioning ? "transform 0.3s ease" : "none",
         }}
       >
         <h2 className="text-lg font-semibold mb-4">
