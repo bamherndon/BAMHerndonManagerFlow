@@ -1,4 +1,3 @@
-// frontend/src/ReviewPage.tsx
 import React, { useEffect, useState, useRef } from "react";
 
 export default function ReviewPage() {
@@ -6,9 +5,8 @@ export default function ReviewPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
-
   const touchStartX = useRef(0);
-  const SWIPE_THRESHOLD = 50; // px
+  const SWIPE_THRESHOLD = 50;
 
   useEffect(() => {
     fetch("/api/import-items")
@@ -17,69 +15,58 @@ export default function ReviewPage() {
       .catch((err) => console.error("Failed to fetch items:", err));
   }, []);
 
-  if (!items.length) {
+  if (items.length === 0) {
     return <div className="p-4">Loading import items...</div>;
   }
 
   const currentItem = items[currentIndex];
   const patronId = currentItem.po_number.split("-")[1] || "";
 
-  const handleNext = () =>
-    setCurrentIndex((i) => Math.min(items.length - 1, i + 1));
-  const handlePrev = () =>
-    setCurrentIndex((i) => Math.max(0, i - 1));
+  const handleMove = (deltaX: number) => {
+    setSwipeOffset(deltaX);
+  };
+  const animateMove = (targetX: number, cb: () => void) => {
+    setIsTransitioning(true);
+    setSwipeOffset(targetX);
+    setTimeout(() => {
+      cb();
+      setSwipeOffset(0);
+      setIsTransitioning(false);
+    }, 300);
+  };
+
+  const handleNext = () => {
+    if (currentIndex < items.length - 1) {
+      animateMove(-window.innerWidth, () => setCurrentIndex((i) => i + 1));
+    } else {
+      animateMove(0, () => {});
+    }
+  };
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      animateMove(window.innerWidth, () => setCurrentIndex((i) => i - 1));
+    } else {
+      animateMove(0, () => {});
+    }
+  };
 
   const onTouchStart = (e: React.TouchEvent) => {
     if (isTransitioning) return;
     touchStartX.current = e.touches[0].clientX;
   };
-
   const onTouchMove = (e: React.TouchEvent) => {
     if (isTransitioning) return;
     const deltaX = e.touches[0].clientX - touchStartX.current;
-    setSwipeOffset(deltaX);
+    handleMove(deltaX);
   };
-
   const onTouchEnd = () => {
     if (isTransitioning) return;
-    const screenWidth = window.innerWidth;
     if (swipeOffset < -SWIPE_THRESHOLD) {
-      // swipe left → Next
-      if (currentIndex < items.length - 1) {
-        setIsTransitioning(true);
-        setSwipeOffset(-screenWidth);
-        setTimeout(() => {
-          handleNext();
-          setIsTransitioning(false);
-          setSwipeOffset(0);
-        }, 300);
-      } else {
-        // no next → snap back
-        setIsTransitioning(true);
-        setSwipeOffset(0);
-        setTimeout(() => setIsTransitioning(false), 300);
-      }
+      handleNext();
     } else if (swipeOffset > SWIPE_THRESHOLD) {
-      // swipe right → Previous
-      if (currentIndex > 0) {
-        setIsTransitioning(true);
-        setSwipeOffset(screenWidth);
-        setTimeout(() => {
-          handlePrev();
-          setIsTransitioning(false);
-          setSwipeOffset(0);
-        }, 300);
-      } else {
-        // no prev → snap back
-        setIsTransitioning(true);
-        setSwipeOffset(0);
-        setTimeout(() => setIsTransitioning(false), 300);
-      }
+      handlePrev();
     } else {
-      // too short → just reset
-      setIsTransitioning(true);
-      setSwipeOffset(0);
-      setTimeout(() => setIsTransitioning(false), 300);
+      animateMove(0, () => {});
     }
   };
 
@@ -98,6 +85,15 @@ export default function ReviewPage() {
           transition: isTransitioning ? "transform 0.3s ease" : "none",
         }}
       >
+        {/* Image */}
+        {currentItem.image_url && (
+          <img
+            src={currentItem.image_url}
+            alt={currentItem.item_description}
+            className="w-full h-auto mb-4 rounded"
+          />
+        )}
+
         <h2 className="text-lg font-semibold mb-4">
           Reviewing Item {currentIndex + 1} of {items.length}
         </h2>
