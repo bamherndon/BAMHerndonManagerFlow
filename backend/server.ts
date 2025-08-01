@@ -125,7 +125,7 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
     .on('data', data => results.push(data))
     .on('end', async () => {
       try {
-        await pool.query('DELETE FROM heartland_po_imports');
+       
         for (const row of results) {
           await pool.query(
             `INSERT INTO heartland_po_imports
@@ -170,10 +170,24 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
     });
 });
 
+app.get('/api/po-numbers', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT DISTINCT po_number FROM heartland_po_imports ORDER BY po_number'
+    );
+    // return array of strings
+    res.json(result.rows.map((r) => r.po_number));
+  } catch (err) {
+    console.error('❌ Error fetching PO numbers:', err);
+    res.status(500).send('Error fetching PO numbers');
+  }
+});
+
 // 2️⃣ Fetch PO items
 app.get('/api/import-items', async (req, res) => {
+  const po = req.query.po as string | undefined;
   try {
-    const result = await pool.query(`
+    let query = `
       SELECT
         h.*,
         COALESCE(s.rebrickable_image_url, t.image_1) AS image_url
@@ -182,14 +196,22 @@ app.get('/api/import-items', async (req, res) => {
         ON h.item_bricklink_id = s.bricklink_id
       LEFT JOIN toyhouse_master_data t
         ON h.item_bricklink_id = t.bricklink_id
-      ORDER BY h.id
-    `);
+    `;
+    const params: any[] = [];
+    if (po) {
+      params.push(po);
+      query += ` WHERE h.po_number = $1`;
+    }
+    query += ` ORDER BY h.id`;
+
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Error fetching items with images:', err);
     res.status(500).send('Error fetching import items');
   }
 });
+
 
 // 3️⃣ ToyHouse master CSV
 app.post('/api/upload-toyhouse-csv', upload.single('file'), async (req, res) => {

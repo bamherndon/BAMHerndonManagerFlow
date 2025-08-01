@@ -1,0 +1,36 @@
+// frontend/src/ReviewListPage.tsx
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+
+export default function ReviewListPage() {
+  const [poNumbers, setPoNumbers] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch("/api/po-numbers")
+      .then((res) => res.json())
+      .then(setPoNumbers)
+      .catch((err) => console.error("Failed to fetch PO numbers:", err));
+  }, []);
+
+  if (!poNumbers.length) {
+    return <div className="p-4">No PO imports yet.</div>;
+  }
+
+  return (
+    <div className="p-4">
+      <h2 className="text-lg font-semibold mb-4">Select PO to Review</h2>
+      <ul className="list-disc pl-5 space-y-2">
+        {poNumbers.map((po) => (
+          <li key={po}>
+            <Link
+              to={`/workflow/review-heartland-import/${encodeURIComponent(po)}`}
+              className="text-blue-600 hover:underline"
+            >
+              {po}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

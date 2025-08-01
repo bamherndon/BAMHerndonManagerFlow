@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 
 export default function ReviewPage() {
   const [items, setItems] = useState<any[]>([]);
+  const { po } = useParams<{ po: string }>();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -9,7 +10,7 @@ export default function ReviewPage() {
   const SWIPE_THRESHOLD = 50;
 
   useEffect(() => {
-    fetch("/api/import-items")
+    fetch(`/api/import-items${po ? "?po=" + encodeURIComponent(po) : ""}`)
       .then((res) => res.json())
       .then(setItems)
       .catch((err) => console.error("Failed to fetch items:", err));
