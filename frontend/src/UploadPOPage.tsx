@@ -27,7 +27,7 @@ export default function UploadPOPage() {
         body: formData,
       });
       if (response.ok) {
-        navigate("/workflow/review");
+        navigate("/workflow/review-heartland-import");
       } else {
         setMessage("Error uploading CSV.");
       }

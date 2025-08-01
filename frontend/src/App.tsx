@@ -16,10 +16,16 @@ export function App() {
             Home
           </Link>
           <Link
-            to="/workflow/heartland-import"
+            to="/workflow/submit-heartland-import"
+            className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700"
+          >
+            Submit Heartland PO import for review
+          </Link>
+          <Link
+            to="/workflow/review-heartland-import"
             className="px-3 py-1 bg-blue-800 rounded hover:bg-blue-700 ml-2"
           >
-            Start Heartland Import
+            Review Heartland Import
           </Link>
           <Link
             to="/workflow/upload-toyhouse"
@@ -39,8 +45,14 @@ export function App() {
       <main className="p-4">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/workflow/heartland-import" element={<UploadPOPage />} />
-          <Route path="/workflow/review" element={<ReviewPage />} />
+          <Route
+            path="/workflow/submit-heartland-import"
+            element={<UploadPOPage />}
+          />
+          <Route
+            path="/workflow/review-heartland-import"
+            element={<ReviewPage />}
+          />
           <Route path="/workflow/upload-toyhouse" element={<UploadToyhousePage />} />
             <Route
           path="/workflow/upload-sets-images"
