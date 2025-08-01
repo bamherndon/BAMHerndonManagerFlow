@@ -1,11 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import UploadPOPage from './UploadPOPage';
-<<<<<<< HEAD
-+import ReviewListPage from "./ReviewListPage";
-=======
 import ReviewListPage from "./ReviewListPage";
->>>>>>> 6630c77 (Added page that lists POs, and updated review page to review only items in the PO)
 import ReviewPage from './ReviewPage';
 import UploadToyhousePage from './UploadToyhousePage';
 import UploadSetsImagesPage from "./UploadSetsImagesPage";
