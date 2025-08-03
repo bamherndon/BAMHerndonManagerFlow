@@ -6,6 +6,9 @@ import multer from 'multer';
 import csv from 'csv-parser';
 import fs from 'fs';
 import { Pool } from 'pg';
+import 'dotenv/config';  
+import { heartlandFetch, createPurchaseOrder , addLineToPurchaseOrder} from './heartlandClient.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -397,6 +400,97 @@ app.post(
   }
 );
 
+app.post('/api/create-po', async (req, res) => {
+  const { vendorName } = req.body as { vendorName?: string };
+  if (!vendorName) {
+    return res.status(400).json({ error: 'vendorName is required' });
+  }
+
+  try {
+    // 1) Search vendors by name
+    // (Adjust query param if your API uses a different filter syntax)
+    const vendorResp = await heartlandFetch(
+      `/purchasing/vendors?search=${encodeURIComponent(vendorName)}`
+    );
+    const vendors = Array.isArray(vendorResp) ? vendorResp : vendorResp.data;
+    if (!vendors.length) {
+      return res.status(404).json({ error: 'Vendor not found' });
+    }
+    const vendorId = vendors[0].id;
+
+    // 2) List locations and take the first one
+    const locations = await heartlandFetch('/locations');
+    if (!Array.isArray(locations) || locations.length === 0) {
+      return res.status(404).json({ error: 'No locations available' });
+    }
+    const locationId = locations[0].id;
+
+    // 3) Create the purchase order
+    const poId = await createPurchaseOrder({
+      vendor_id: vendorId,
+      receive_at_location_id: locationId,
+      description: `PO for vendor ${vendorName}`
+    });
+
+    res.json({ purchaseOrderId: poId });
+  } catch (err: any) {
+    console.error('❌ Error creating PO:', err);
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/add-item-to-po
+ * Body:
+ *   {
+ *     "itemId": number,
+ *     "updateData": { /* fields to PATCH/PUT on the item *\/ },
+ *     "purchaseOrderId": number,
+ *     "qty": number,
+ *     "unitCost": number,
+ *     "qtyReceived": number? 
+ *   }
+ */
+app.post('/api/add-item-to-po', async (req, res) => {
+  const {
+    itemId,
+    updateData,
+    purchaseOrderId,
+    qty,
+    unitCost,
+    qtyReceived,
+  } = req.body;
+
+  if (
+    typeof itemId !== 'number' ||
+    typeof purchaseOrderId !== 'number' ||
+    typeof qty !== 'number' ||
+    typeof unitCost !== 'number'
+  ) {
+    return res.status(400).json({ error: 'itemId, purchaseOrderId, qty and unitCost are required and must be numbers' });
+  }
+
+  try {
+    // 1) Update the item in Heartland
+    await heartlandFetch(`/items/${itemId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData || {}),
+    });
+
+    // 2) Add a line to the purchase order
+    const lineId = await addLineToPurchaseOrder(purchaseOrderId, {
+      item_id: itemId,
+      qty,
+      unit_cost: unitCost,
+      qty_received: typeof qtyReceived === 'number' ? qtyReceived : undefined,
+    });
+
+    return res.json({ lineId });
+  } catch (err: any) {
+    console.error('❌ /api/add-item-to-po error:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
 
 
 // SPA fallback
