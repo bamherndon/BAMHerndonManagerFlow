@@ -11,12 +11,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
+app.use(express.json());
 const upload = multer({ dest: 'uploads/' });
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: { rejectUnauthorized: false },
 });
 
 // helper to safely parse numeric fields
@@ -99,6 +98,29 @@ async function ensureTablesExist() {
         uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_type WHERE typname = 'heartland_import_status'
+        ) THEN
+          CREATE TYPE heartland_import_status AS ENUM (
+            'loaded','reviewing','reviewed'
+          );
+        END IF;
+      END
+      $$;
+    `);
+    
+    await pool.query(`
+      -- master table for tracking each PO import
+      CREATE TABLE IF NOT EXISTS heartland_import_master (
+        po_number TEXT PRIMARY KEY,
+        po_url TEXT,
+        po_import_status heartland_import_status NOT NULL DEFAULT 'loaded'
+      );
+    `);
+
 
     console.log('✅ All tables ensured');
   } catch (err) {
@@ -125,7 +147,17 @@ app.post('/api/upload-po-csv', upload.single('file'), async (req, res) => {
     .on('data', data => results.push(data))
     .on('end', async () => {
       try {
-       
+        const poNumber = results[0]?.po_number;
+        if (poNumber) {
+          // upsert into the master table, status=loaded
+          await pool.query(`
+            INSERT INTO heartland_import_master
+              (po_number, po_url, po_import_status)
+            VALUES ($1, $2, 'loaded')
+            ON CONFLICT (po_number) DO UPDATE
+              SET po_import_status = 'loaded'
+          `, [poNumber, null]);
+          }
         for (const row of results) {
           await pool.query(
             `INSERT INTO heartland_po_imports
@@ -186,31 +218,45 @@ app.get('/api/po-numbers', async (req, res) => {
 // 2️⃣ Fetch PO items
 app.get('/api/import-items', async (req, res) => {
   const po = req.query.po as string | undefined;
+
   try {
-    let query = `
+    // Build base SQL
+    let sql = `
       SELECT
         h.*,
-        COALESCE(s.rebrickable_image_url, t.image_1) AS image_url
+        COALESCE(
+          (SELECT rebrickable_image_url
+           FROM set_image_urls
+           WHERE bricklink_id = h.item_bricklink_id
+           ORDER BY id DESC
+           LIMIT 1),
+          (SELECT image_1
+           FROM toyhouse_master_data
+           WHERE bricklink_id = h.item_bricklink_id
+           ORDER BY id DESC
+           LIMIT 1)
+        ) AS image_url
       FROM heartland_po_imports h
-      LEFT JOIN set_image_urls s
-        ON h.item_bricklink_id = s.bricklink_id
-      LEFT JOIN toyhouse_master_data t
-        ON h.item_bricklink_id = t.bricklink_id
     `;
     const params: any[] = [];
+
+    // Optional PO filter
     if (po) {
       params.push(po);
-      query += ` WHERE h.po_number = $1`;
+      sql += ` WHERE h.po_number = $1`;
     }
-    query += ` ORDER BY h.id`;
 
-    const result = await pool.query(query, params);
+    sql += ` ORDER BY h.id`;
+
+    // Execute and return
+    const result = await pool.query(sql, params);
     res.json(result.rows);
   } catch (err) {
     console.error('❌ Error fetching items with images:', err);
     res.status(500).send('Error fetching import items');
   }
 });
+
 
 
 // 3️⃣ ToyHouse master CSV
@@ -309,6 +355,49 @@ app.post('/api/upload-sets-images', upload.single('file'), async (req, res) => {
       res.send(`Imported ${count} of ${rows.length} set-image records.`);
     });
 });
+
+// GET /api/po-import-master
+app.get('/api/po-import-master', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        po_number,
+        po_url,
+        po_import_status
+      FROM heartland_import_master
+      ORDER BY po_number
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('❌ Error fetching master records:', err);
+    res.status(500).send('Error fetching PO import master records');
+  }
+});
+
+app.post(
+  '/api/po-import-master/:po/status',
+  async (req, res) => {
+    const po = req.params.po;
+    const { status } = req.body as { status: string };
+    if (!['loaded','reviewing','reviewed'].includes(status)) {
+      return res.status(400).send('Invalid status');
+    }
+    try {
+      await pool.query(
+        `UPDATE heartland_import_master
+         SET po_import_status = $1
+         WHERE po_number = $2`,
+        [status, po]
+      );
+      res.sendStatus(200);
+    } catch (err) {
+      console.error('❌ Error updating status:', err);
+      res.status(500).send('Error updating status');
+    }
+  }
+);
+
+
 
 // SPA fallback
 app.get('*', (req, res) => {
