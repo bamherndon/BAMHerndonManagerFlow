@@ -18,6 +18,7 @@ export async function heartlandFetch(
   opts: RequestInit = {}
 ) {
   const url = `${BASE_URL}${path}`;
+  console.log(`Heartland API call: ${url}`, opts);
   const { headers = {}, ...rest } = opts;
   const resp = await fetch(url, {
     ...rest,
@@ -31,7 +32,10 @@ export async function heartlandFetch(
     const text = await resp.text();
     throw new Error(`Heartland API ${resp.status} ${resp.statusText}: ${text}`);
   }
-  return resp.json();
+  const body = await resp.text();
+  console.log(`Heartland API response: ${resp.status} ${resp.statusText}`, body);
+  const json = body ? JSON.parse(body) : {};
+  return json.results || {}   ;
 }
 
 /**
@@ -39,11 +43,13 @@ export async function heartlandFetch(
  * POST /purchasing/orders
  */
 export async function createPurchaseOrder(params: {
+  public_id: string; // optional public ID for the PO
   vendor_id: number;
   receive_at_location_id: number;
   start_shipments_at?: string;
   end_shipments_at?: string;
   description?: string;
+  status?: string;
 }): Promise<number> {
   const resp = await fetch(`${BASE_URL}/purchasing/orders`, {
     method: 'POST',
@@ -105,4 +111,15 @@ export async function addLineToPurchaseOrder(
 
   const parts = location.split('/');
   return parseInt(parts[parts.length - 1], 10);
+}
+
+export async function getHeartlandItemByPublicId(publicId: string) {
+  const resp = await heartlandFetch(`/items?public_id=${encodeURIComponent(publicId)}`);
+  const foundItems = Array.isArray(resp) ? resp : resp.data || [];
+  console.log("Found items:", foundItems);
+  if (foundItems.length > 0) {
+    return foundItems[0].id;
+  } else {
+    return null;
+  }
 }

@@ -128,13 +128,44 @@ export default function ReviewPage() {
       }
     }
 
-    await fetch(`/api/po-import-master/${encodeURIComponent(po!)}/status`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'reviewed' }),
-    });
+    // inside handleImport(), after validations pass...
 
-    setImportMessage('Starting Import into heartland');
+    // 2) Build lines payload from current items
+    console.log('Building import payload from items', items);
+    const payload = {
+      po: currentItem.po_number,
+      vendorName: currentItem.po_vendor,
+      lines: items.map((row, idx) => ({
+        bricklink_id: row.item_bricklink_id,
+        sub_department: selections[idx].subDepartment,
+        bam_category: selections[idx].subCategory,
+        current_price: row.item_current_price,
+        po_line_qty: row.po_line_qty,
+        po_line_unit_cost: row.po_line_unit_cost,
+        image_url: row.image_url,
+      })),
+    };
+
+    console.log('Import payload:', payload);
+    try {
+      const resp = await fetch('/api/import-heartland', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        setImportMessage(`Import failed: ${txt}`);
+        return;
+      }
+      const { poId, results } = await resp.json();
+      setImportMessage(
+        `PO ${poId} created. ${results.length} lines processed.`
+      );
+    } catch (e: any) {
+      setImportMessage(`Error: ${e.message}`);
+    }
+
   };
 
   return (

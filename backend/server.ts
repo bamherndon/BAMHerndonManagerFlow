@@ -7,7 +7,8 @@ import csv from 'csv-parser';
 import fs from 'fs';
 import { Pool } from 'pg';
 import 'dotenv/config';  
-import { heartlandFetch, createPurchaseOrder , addLineToPurchaseOrder} from './heartlandClient.js';
+import { heartlandFetch, createPurchaseOrder , addLineToPurchaseOrder, getHeartlandItemByPublicId} from './heartlandClient.js';
+import { get } from 'http';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -400,98 +401,213 @@ app.post(
   }
 );
 
-app.post('/api/create-po', async (req, res) => {
-  const { vendorName } = req.body as { vendorName?: string };
-  if (!vendorName) {
-    return res.status(400).json({ error: 'vendorName is required' });
+
+
+
+/**
+ * POST /api/import-heartland
+ * Body: {
+ *   po: string,
+ *   vendorName: string,
+ *   lines: Array<{
+ *     bricklink_id: string,
+ *    sub_department: string,
+ *    bam_category: string,
+ * current_price: Number,
+ * po_line_qty: Number,
+ * po_line_unit_cost: Number,
+ *   }>
+ * }
+ */
+app.post('/api/import-heartland', async (req, res) => {
+  const { po, vendorName, lines } = req.body;
+  if (!po || !vendorName || !Array.isArray(lines) || lines.length === 0) {
+    return res.status(400).json({ error: 'po, vendorName and non-empty lines[] are required' });
   }
 
+  // prefix mapping for public_id
+  const prefixMap: Record<string,string> = {
+    'Pre-Built Set': '-1',
+    'Project Set': '-project',
+    'Allowance Set': '-allowance',
+    'Boxed Set': '-2',
+    'Polybag/Paper Bag': '-2',
+    'Incomplete Set': '-3',
+    'Certified Used Set': '-cert',
+  };
+
   try {
-    // 1) Search vendors by name
-    // (Adjust query param if your API uses a different filter syntax)
+    // 1) Lookup vendor ID
     const vendorResp = await heartlandFetch(
-      `/purchasing/vendors?search=${encodeURIComponent(vendorName)}`
+      `/purchasing/vendors?name=${encodeURIComponent(vendorName)}`
     );
     const vendors = Array.isArray(vendorResp) ? vendorResp : vendorResp.data;
     if (!vendors.length) {
-      return res.status(404).json({ error: 'Vendor not found' });
+      return res.status(404).json({ error: `Vendor "${vendorName}" not found` });
     }
     const vendorId = vendors[0].id;
 
-    // 2) List locations and take the first one
+    // 2) Lookup first location
     const locations = await heartlandFetch('/locations');
     if (!Array.isArray(locations) || locations.length === 0) {
-      return res.status(404).json({ error: 'No locations available' });
+      return res.status(404).json({ error: 'No locations found' });
     }
     const locationId = locations[0].id;
 
-    // 3) Create the purchase order
+    // 3) For each line: upsert item, update inventory, then upload image
+    for (const line of lines) {
+      const item_bricklink_id = line.bricklink_id;
+
+      console.log("Processing item:", line);
+      // 3a) load import row
+      const impRes = await pool.query(
+        `SELECT * FROM heartland_po_imports
+         WHERE po_number = $1 AND item_bricklink_id = $2
+         LIMIT 1`,
+        [po, item_bricklink_id]
+      );
+      const imp = impRes.rows[0];
+      console.log("Import row:", imp);
+      if (!imp) continue;
+
+      // 3b) load ToyHouse master data
+      const toyRes = await pool.query(
+        `SELECT shopify_tags, bam_category, theme
+         FROM toyhouse_master_data
+         WHERE bricklink_id = $1
+         LIMIT 1`,
+        [item_bricklink_id]
+      );
+      const toy = toyRes.rows[0] || {};
+      console.log("ToyHouse data:", toy);
+
+      // 3c) build public_id
+      const prefix = prefixMap[line.bam_category] || '';
+      const public_id = `${imp.item_number}${prefix}`;
+
+      
+
+      // 3e) build custom object
+      const custom = {
+        tax_category: imp.item_taxable ? 'yes' : 'no',
+        department: imp.item_department,
+        category: toy.bam_category || '',
+        series: '',
+        bricklink_id: item_bricklink_id,
+        tags: `${toy.shopify_tags || ''},${line.bam_category}`,
+        sub_department: line.sub_department,
+        bam_category: line.bam_category,
+        theme: toy.theme || '',
+      };
+
+      // 3f) search for existing item
+      let heartlandItemId = await getHeartlandItemByPublicId(public_id);
+
+      if (heartlandItemId) {
+        // update existing item
+        console.log("Updating existing item:", heartlandItemId);
+        await heartlandFetch(`/items/${heartlandItemId}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            public_id,
+            cost: parseFloat(imp.item_default_cost),
+            price: parseFloat(line.current_price),
+            description: imp.item_description,
+            primary_vendor_id: vendorId,
+            custom,
+          }),
+        });
+      } else {
+        // create new item
+        console.log("Creating new item with public_id:", public_id);
+        await heartlandFetch('/items', {
+          method: 'POST',
+          body: JSON.stringify({
+            public_id,
+            cost: parseFloat(imp.item_default_cost),
+            price: parseFloat(line.current_price),
+            description: imp.item_description,
+            primary_vendor_id: vendorId,
+            custom,
+        
+          }),
+        });
+        heartlandItemId = await getHeartlandItemByPublicId(public_id);
+        
+      }
+      if(!heartlandItemId) {
+        console.warn(`⚠️ Failed to create or find item for public_id ${public_id}`);
+        continue;
+      }
+      line.heartland_item_id = heartlandItemId;
+
+
+      // 3h) POST image if provided
+      if (line.image_url) {
+        console.log("Uploading image for item:", public_id);
+        try {
+          await heartlandFetch(`/items/${heartlandItemId}/images`, {
+            method: 'POST',
+            body: JSON.stringify({
+              source: 'url',
+              url: line.image_url,
+            }),
+          });
+        } catch (imgErr) {
+          console.warn(`⚠️ Failed to upload image for ${public_id}:`, imgErr);
+        }
+      }
+    }
+    // 3a) load first import row
+      const impRes = await pool.query(
+        `SELECT * FROM heartland_po_imports
+         WHERE po_number = $1
+         LIMIT 1`,
+        [po, ]
+      );
+      const imp = impRes.rows[0];
+      
+
+    // 4) Create the Purchase Order, including start/end shipment dates
     const poId = await createPurchaseOrder({
+      public_id: po,
       vendor_id: vendorId,
       receive_at_location_id: locationId,
-      description: `PO for vendor ${vendorName}`
+      start_shipments_at: imp.po_start_ship,  // from CSV’s PO Start Ship
+      end_shipments_at:   imp.po_end_ship,    // from CSV’s PO End Ship
+      description:        `Imported PO ${po}`,
+      //status:             'open', 
     });
 
-    res.json({ purchaseOrderId: poId });
+    // 5) Add each line to the PO
+    const results: Array<{ bricklink_id: string; lineId?: number; error?: string }> = [];
+    for (const line of lines) {
+      try {
+        console.log("Adding line to PO:", line);
+        const lineId = await addLineToPurchaseOrder(poId, {
+          item_id: line.heartland_item_id,
+          qty: line.po_line_qty,
+          unit_cost: line.po_line_unit_cost,
+        });
+        results.push({ bricklink_id: line.bricklink_id, lineId });
+      } catch (e: any) {
+        results.push({ bricklink_id: line.bricklink_id, error: e.message });
+      }
+    }
+
+    // 6) Mark master status as "reviewed"
+    await pool.query(
+      'UPDATE heartland_import_master SET po_import_status = $1 WHERE po_number = $2',
+      ['reviewed', po]
+    );
+
+    // 7) Return summary
+    return res.json({ poId, results });
   } catch (err: any) {
-    console.error('❌ Error creating PO:', err);
-    res.status(500).json({ error: err.message || 'Internal server error' });
+    console.error('❌ /api/import-heartland error:', err);
+    return res.status(500).json({ error: err.message });
   }
 });
-
-/**
- * POST /api/add-item-to-po
- * Body:
- *   {
- *     "itemId": number,
- *     "updateData": { /* fields to PATCH/PUT on the item *\/ },
- *     "purchaseOrderId": number,
- *     "qty": number,
- *     "unitCost": number,
- *     "qtyReceived": number? 
- *   }
- */
-app.post('/api/add-item-to-po', async (req, res) => {
-  const {
-    itemId,
-    updateData,
-    purchaseOrderId,
-    qty,
-    unitCost,
-    qtyReceived,
-  } = req.body;
-
-  if (
-    typeof itemId !== 'number' ||
-    typeof purchaseOrderId !== 'number' ||
-    typeof qty !== 'number' ||
-    typeof unitCost !== 'number'
-  ) {
-    return res.status(400).json({ error: 'itemId, purchaseOrderId, qty and unitCost are required and must be numbers' });
-  }
-
-  try {
-    // 1) Update the item in Heartland
-    await heartlandFetch(`/items/${itemId}`, {
-      method: 'PUT',
-      body: JSON.stringify(updateData || {}),
-    });
-
-    // 2) Add a line to the purchase order
-    const lineId = await addLineToPurchaseOrder(purchaseOrderId, {
-      item_id: itemId,
-      qty,
-      unit_cost: unitCost,
-      qty_received: typeof qtyReceived === 'number' ? qtyReceived : undefined,
-    });
-
-    return res.json({ lineId });
-  } catch (err: any) {
-    console.error('❌ /api/add-item-to-po error:', err);
-    return res.status(500).json({ error: err.message || 'Internal server error' });
-  }
-});
-
 
 // SPA fallback
 app.get('*', (req, res) => {
